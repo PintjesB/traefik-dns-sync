@@ -21,14 +21,23 @@ jobs:
         run: |
           git fetch --tags
           LATEST=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
-          echo "latest=${LATEST:-v0.0.0}" >> $GITHUB_OUTPUT
+          if [ -z "$LATEST" ]; then
+            echo "latest=none" >> $GITHUB_OUTPUT
+          else
+            echo "latest=${LATEST}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Determine bump type
         id: bump
         run: |
           LATEST=${{ steps.get_tag.outputs.latest }}
-          # Get commits since last tag
-          COMMITS=$(git log ${LATEST}..HEAD --pretty=format:"%s")
+
+          if [ "$LATEST" = "none" ]; then
+            COMMITS=$(git log --pretty=format:"%s")
+          else
+            COMMITS=$(git log ${LATEST}..HEAD --pretty=format:"%s")
+          fi
+
           echo "Commits since ${LATEST}:"
           echo "$COMMITS"
 
@@ -46,19 +55,27 @@ jobs:
           LATEST=${{ steps.get_tag.outputs.latest }}
           TYPE=${{ steps.bump.outputs.type }}
 
-          # Strip v prefix
-          VERSION=${LATEST#v}
-          MAJOR=$(echo $VERSION | cut -d. -f1)
-          MINOR=$(echo $VERSION | cut -d. -f2)
-          PATCH=$(echo $VERSION | cut -d. -f3)
+          if [ "$LATEST" = "none" ]; then
+            case $TYPE in
+              major) NEW="v1.0.0" ;;
+              minor) NEW="v0.1.0" ;;
+              patch) NEW="v0.0.1" ;;
+            esac
+          else
+            VERSION=${LATEST#v}
+            MAJOR=$(echo $VERSION | cut -d. -f1)
+            MINOR=$(echo $VERSION | cut -d. -f2)
+            PATCH=$(echo $VERSION | cut -d. -f3)
 
-          case $TYPE in
-            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
-            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
-            patch) PATCH=$((PATCH+1)) ;;
-          esac
+            case $TYPE in
+              major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH+1)) ;;
+            esac
 
-          NEW="v${MAJOR}.${MINOR}.${PATCH}"
+            NEW="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+
           echo "new=${NEW}" >> $GITHUB_OUTPUT
           echo "New version: ${NEW} (${TYPE} bump)"
 
