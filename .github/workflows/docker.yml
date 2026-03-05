@@ -57,15 +57,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
-```
+          
 
-This will:
-- Build and push on every push to `main` → tagged as `latest`
-- Build and push on version tags (`v1.0.0`) → tagged as `v1.0.0`, `1.0`, `latest`
-- Build only (no push) on pull requests
-- Build for both `amd64` and `arm64`
-- Use GitHub Actions cache to speed up subsequent builds
+# This will:
+# - Build and push on every push to `main` → tagged as `latest`
+# - Build and push on version tags (`v1.0.0`) → tagged as `v1.0.0`, `1.0`, `latest`
+# - Build only (no push) on pull requests
+# - Build for both `amd64` and `arm64`
+# - Use GitHub Actions cache to speed up subsequent builds
 
-Once pushed, your image will be available at:
-```
-ghcr.io/yourusername/traefik-dns-sync:latest
+# Once pushed, your image will be available at:
+
+# ghcr.io/yourusername/traefik-dns-sync:latest
