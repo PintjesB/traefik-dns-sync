@@ -16,8 +16,3 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
-The full flow then becomes:
-```
-Dependabot opens PR → docker.yml builds image → if build passes → auto-merge.yml merges PR → docker.yml runs again on main → pushes new :latest image to ghcr.io
