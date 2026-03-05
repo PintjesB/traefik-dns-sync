@@ -3,23 +3,20 @@
 # =============================================
 FROM python:3.11-slim AS builder
 
-# Isolated venv = reliable + tiny
+# Isolated venv (fixes the redis import forever)
 RUN python -m venv /venv
 
 WORKDIR /app
-
 COPY requirements.txt .
 RUN /venv/bin/pip install --no-cache-dir --no-compile -r requirements.txt
 
 # =============================================
-# Final stage — ultra-small + secure
+# Final stage — tiny + maximum security
 # =============================================
 FROM gcr.io/distroless/python3-debian12:nonroot
 
-# Copy only the venv (this fixes the ModuleNotFoundError)
+# Copy only the venv + script
 COPY --from=builder /venv /venv
-
-# Copy script
 COPY sync.py /app/
 
 WORKDIR /app
@@ -29,6 +26,5 @@ ENV PATH="/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Runs as non-root (uid 65532) by default
-# No shell, no apt, no extra tools → minimal attack surface
-ENTRYPOINT ["python", "sync.py"]
+# Absolute python path = bulletproof (no symlink issues in distroless)
+ENTRYPOINT ["/venv/bin/python", "/app/sync.py"]
