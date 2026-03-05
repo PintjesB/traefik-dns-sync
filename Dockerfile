@@ -1,30 +1,20 @@
-# =============================================
-# Builder stage — clean dependency install
-# =============================================
-FROM python:3.11-slim AS builder
+# cache-bust: 2026-03-05-v3 — fixes venv + runtime compatibility
+FROM python:3.11-slim
 
-# Isolated venv (fixes the redis import forever)
-RUN python -m venv /venv
+# Security: dedicated non-root user (best practice 2026)
+RUN useradd --create-home --shell /bin/false --uid 1000 appuser
 
 WORKDIR /app
+
 COPY requirements.txt .
-RUN /venv/bin/pip install --no-cache-dir --no-compile -r requirements.txt
+RUN pip install --no-cache-dir --no-compile -r requirements.txt
 
-# =============================================
-# Final stage — tiny + maximum security
-# =============================================
-FROM gcr.io/distroless/python3-debian12:nonroot
+COPY sync.py .
 
-# Copy only the venv + script
-COPY --from=builder /venv /venv
-COPY sync.py /app/
+# Drop privileges
+USER appuser
 
-WORKDIR /app
-
-# Runtime config
-ENV PATH="/venv/bin:$PATH" \
-    PYTHONDONTWRITEBYTECODE=1 \
+ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Absolute python path = bulletproof (no symlink issues in distroless)
-ENTRYPOINT ["/venv/bin/python", "/app/sync.py"]
+ENTRYPOINT ["python", "sync.py"]
