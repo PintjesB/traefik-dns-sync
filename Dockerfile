@@ -1,21 +1,36 @@
+# =============================================
+# Builder stage (installs deps cleanly)
+# =============================================
 FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
+# Create isolated virtual environment (the reliable way for distroless)
+RUN python -m venv /venv
+
+# Install the only dependency (redis-py is pure Python → tiny)
 COPY requirements.txt .
+RUN /venv/bin/pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --no-cache-dir --prefix=/install --no-compile -r requirements.txt
-
-
+# =============================================
+# Final stage — tiny + ultra-secure
+# =============================================
 FROM gcr.io/distroless/python3-debian12:nonroot
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+# Copy only the virtual environment (this fixes the redis import error)
+COPY --from=builder /venv /venv
 
 WORKDIR /app
 
-COPY --from=builder /install/lib /usr/local/lib
-
+# Copy your script (nothing else)
 COPY sync.py .
 
-ENTRYPOINT ["python3.11", "sync.py"]
+# Minimal runtime environment
+ENV PATH="/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Already runs as non-root (uid 65532) thanks to :nonroot tag
+# No shell, no package manager, no unnecessary files → minimal attack surface
+
+ENTRYPOINT ["python", "sync.py"]
