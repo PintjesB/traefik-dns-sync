@@ -101,8 +101,9 @@ def make_redis() -> redis.Redis:
         port=REDIS_PORT,
         password=REDIS_PASSWORD or None,
         decode_responses=True,
-        socket_connect_timeout=5,
-        socket_timeout=5,
+        socket_connect_timeout=10,
+        socket_timeout=None,          # ← critical fix for pubsub
+        socket_keepalive=True,        # keeps connection alive across idle periods
     )
 
 def enable_keyspace_notifications(r: redis.Redis) -> None:
