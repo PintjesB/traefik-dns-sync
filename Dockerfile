@@ -1,25 +1,26 @@
-FROM python:3.13-alpine AS builder
+FROM python:3.13-slim AS builder
 
 WORKDIR /app
 
-# Install deps into isolated prefix
-RUN pip install --no-cache-dir --prefix=/install redis requests
+COPY requirements.txt .
+
+# Install only redis-py — requests replaced with stdlib urllib
+RUN pip install --no-cache-dir --prefix=/install --no-compile -r requirements.txt
 
 
-FROM python:3.13-alpine
+FROM gcr.io/distroless/python3-debian12:nonroot
 
-# No root — create dedicated user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Prevent .pyc files and force stdout/stderr unbuffered
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Copy only installed packages from builder stage
-COPY --from=builder /install /usr/local
+# Copy only installed packages from builder
+COPY --from=builder /install/lib /usr/local/lib
 
-# Copy app with correct ownership
-COPY --chown=appuser:appgroup sync.py .
+# Copy app — distroless nonroot image already runs as uid 65532
+COPY sync.py .
 
-USER appuser
-
-# No shell entrypoint — exec form only
-ENTRYPOINT ["python", "-u", "sync.py"]
+# No shell, no package manager, no root, no /bin/sh, no /bin/bash
+ENTRYPOINT ["python", "sync.py"]
