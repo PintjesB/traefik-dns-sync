@@ -1,36 +1,36 @@
 #!/usr/bin/env python3
 """
 traefik-dns-sync
-Watches Redis for Traefik router rules and auto-creates/deletes Cloudflare DNS records.
+Watches Redis for Traefik router rules and auto-creates/deletes Cloudflare CNAME records.
+Uses only stdlib + redis-py — no requests dependency.
 """
 
+import json
 import os
 import re
 import time
 import logging
-import threading
-import requests
+import urllib.request
+import urllib.parse
+import urllib.error
 import redis
 
 # ── Config from env ────────────────────────────────────────────────────────────
-REDIS_HOST         = os.environ["REDIS_HOST"]
-REDIS_PORT         = int(os.getenv("REDIS_PORT", "6379"))
-REDIS_PASSWORD     = os.getenv("REDIS_PASSWORD", "")
-REDIS_ROOT_KEY     = os.getenv("REDIS_ROOT_KEY", "traefik")
+REDIS_HOST     = os.environ["REDIS_HOST"]
+REDIS_PORT     = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
+REDIS_ROOT_KEY = os.getenv("REDIS_ROOT_KEY", "traefik")
 
-CF_API_TOKEN       = os.environ["CF_API_TOKEN"]
-CF_ZONE_NAME       = os.environ["CF_ZONE_NAME"]          # e.g. tristandk.be
-CNAME_TARGET       = os.environ["CNAME_TARGET"]          # e.g. gent.tristandk.be
-CF_PROXIED         = os.getenv("CF_PROXIED", "true").lower() == "true"
-CF_AUTO_DELETE     = os.getenv("CF_AUTO_DELETE", "false").lower() == "true"
+CF_API_TOKEN   = os.environ["CF_API_TOKEN"]
+CF_ZONE_NAME   = os.environ["CF_ZONE_NAME"]
+CNAME_TARGET   = os.environ["CNAME_TARGET"]
+CF_PROXIED     = os.getenv("CF_PROXIED", "true").lower() == "true"
+CF_AUTO_DELETE = os.getenv("CF_AUTO_DELETE", "false").lower() == "true"
+EXCLUDE_HOSTS  = set(h.strip() for h in os.getenv("EXCLUDE_HOSTS", "").split(",") if h.strip())
+LOG_LEVEL      = os.getenv("LOG_LEVEL", "INFO").upper()
 
-# Comma-separated list of hostnames to never touch
-EXCLUDE_HOSTS      = set(h.strip() for h in os.getenv("EXCLUDE_HOSTS", "").split(",") if h.strip())
-
-LOG_LEVEL          = os.getenv("LOG_LEVEL", "INFO").upper()
-
-# Tag added to all records we create — used to identify ownership
-RECORD_COMMENT     = "traefik-dns-sync"
+HTTP_TIMEOUT   = 10  # seconds for all HTTP calls
+RECORD_COMMENT = "traefik-dns-sync"
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -39,100 +39,97 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ── Cloudflare API ─────────────────────────────────────────────────────────────
-CF_BASE = "https://api.cloudflare.com/client/v4"
-CF_HEADERS = {
+# ── Compiled constants ─────────────────────────────────────────────────────────
+HOST_RE      = re.compile(r"Host\(`([^`]+)`\)", re.IGNORECASE)
+ROUTER_RE    = re.compile(r"^traefik/http/routers/[^/]+/rule$")
+CF_BASE      = "https://api.cloudflare.com/client/v4"
+CF_HEADERS   = {
     "Authorization": f"Bearer {CF_API_TOKEN}",
     "Content-Type": "application/json",
 }
 
-def cf_get_zone_id():
-    r = requests.get(f"{CF_BASE}/zones", headers=CF_HEADERS, params={"name": CF_ZONE_NAME})
-    r.raise_for_status()
-    zones = r.json()["result"]
-    if not zones:
-        raise ValueError(f"Zone {CF_ZONE_NAME!r} not found in Cloudflare")
-    return zones[0]["id"]
+# ── Cloudflare API (stdlib urllib) ─────────────────────────────────────────────
+def _cf_request(method: str, path: str, params: dict = None, body: dict = None) -> dict:
+    url = f"{CF_BASE}{path}"
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    data = json.dumps(body).encode() if body else None
+    req = urllib.request.Request(url, data=data, headers=CF_HEADERS, method=method)
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+        return json.loads(resp.read())
 
-def cf_list_records(zone_id):
+def cf_get_zone_id() -> str:
+    data = _cf_request("GET", "/zones", params={"name": CF_ZONE_NAME})
+    if not data["result"]:
+        raise ValueError(f"Zone {CF_ZONE_NAME!r} not found in Cloudflare")
+    return data["result"][0]["id"]
+
+def cf_list_records(zone_id: str) -> dict:
     """Return dict of name → record for records we own."""
-    records = {}
+    owned = {}
     page = 1
     while True:
-        r = requests.get(
-            f"{CF_BASE}/zones/{zone_id}/dns_records",
-            headers=CF_HEADERS,
-            params={"type": "CNAME", "per_page": 100, "page": page},
-        )
-        r.raise_for_status()
-        data = r.json()
+        data = _cf_request("GET", f"/zones/{zone_id}/dns_records",
+                           params={"type": "CNAME", "per_page": 100, "page": page})
         for rec in data["result"]:
             if rec.get("comment") == RECORD_COMMENT:
-                records[rec["name"]] = rec
+                owned[rec["name"]] = rec
         if page >= data["result_info"]["total_pages"]:
             break
         page += 1
-    return records
+    return owned
 
-def cf_create_record(zone_id, name):
-    payload = {
+def cf_create_record(zone_id: str, name: str) -> None:
+    _cf_request("POST", f"/zones/{zone_id}/dns_records", body={
         "type": "CNAME",
         "name": name,
         "content": CNAME_TARGET,
-        "ttl": 1,  # Auto
+        "ttl": 1,
         "proxied": CF_PROXIED,
         "comment": RECORD_COMMENT,
-    }
-    r = requests.post(f"{CF_BASE}/zones/{zone_id}/dns_records", headers=CF_HEADERS, json=payload)
-    r.raise_for_status()
+    })
     log.info(f"Created CNAME {name} → {CNAME_TARGET} (proxied={CF_PROXIED})")
 
-def cf_delete_record(zone_id, record_id, name):
-    r = requests.delete(f"{CF_BASE}/zones/{zone_id}/dns_records/{record_id}", headers=CF_HEADERS)
-    r.raise_for_status()
+def cf_delete_record(zone_id: str, record_id: str, name: str) -> None:
+    _cf_request("DELETE", f"/zones/{zone_id}/dns_records/{record_id}")
     log.info(f"Deleted CNAME {name}")
 
 # ── Redis helpers ──────────────────────────────────────────────────────────────
-def make_redis():
+def make_redis() -> redis.Redis:
     return redis.Redis(
         host=REDIS_HOST,
         port=REDIS_PORT,
         password=REDIS_PASSWORD or None,
         decode_responses=True,
+        socket_connect_timeout=5,
+        socket_timeout=5,
     )
 
-def enable_keyspace_notifications(r):
-    """Enable Redis keyspace notifications for generic commands and string set/del."""
+def enable_keyspace_notifications(r: redis.Redis) -> None:
     try:
         current = r.config_get("notify-keyspace-events").get("notify-keyspace-events", "")
-        # We need K (keyspace), E (keyevent), g (generic), $ (string), x (expired)
         needed = set("KEg$x")
-        current_set = set(current)
-        if not needed.issubset(current_set):
-            new_val = "".join(needed | current_set)
+        if not needed.issubset(set(current)):
+            new_val = "".join(needed | set(current))
             r.config_set("notify-keyspace-events", new_val)
             log.info(f"Enabled Redis keyspace notifications (was: {current!r}, now: {new_val!r})")
         else:
             log.info("Redis keyspace notifications already enabled")
     except Exception as e:
-        log.warning(f"Could not set keyspace notifications: {e} — falling back to poll mode")
+        log.warning(f"Could not set keyspace notifications: {e}")
 
-def get_all_router_rules(r):
-    """Scan Redis for all traefik router rule keys."""
-    pattern = f"{REDIS_ROOT_KEY}/http/routers/*/rule"
-    keys = r.keys(pattern)
+def get_all_router_rules(r: redis.Redis) -> dict:
+    """Use SCAN instead of KEYS to avoid blocking Redis."""
     rules = {}
-    for key in keys:
+    pattern = f"{REDIS_ROOT_KEY}/http/routers/*/rule"
+    for key in r.scan_iter(pattern, count=100):
         val = r.get(key)
         if val:
             rules[key] = val
     return rules
 
-# ── Hostname parsing ───────────────────────────────────────────────────────────
-HOST_RE = re.compile(r"Host\(`([^`]+)`\)", re.IGNORECASE)
-
-def extract_hosts(rule: str) -> list[str]:
-    """Extract all hostnames from a Traefik router rule string."""
+# ── Hostname helpers ───────────────────────────────────────────────────────────
+def extract_hosts(rule: str) -> list:
     return HOST_RE.findall(rule)
 
 def is_in_zone(hostname: str) -> bool:
@@ -140,26 +137,22 @@ def is_in_zone(hostname: str) -> bool:
 
 # ── Core sync logic ────────────────────────────────────────────────────────────
 class DnsSync:
-    def __init__(self):
-        self.r = make_redis()
-        self.zone_id = cf_get_zone_id()
-        log.info(f"Zone ID for {CF_ZONE_NAME}: {self.zone_id}")
+    def __init__(self, r: redis.Redis, zone_id: str):
+        self.r = r
+        self.zone_id = zone_id
 
     def desired_hosts(self) -> set:
-        """All hostnames currently in Redis that belong to our zone."""
         hosts = set()
-        for key, rule in get_all_router_rules(self.r).items():
+        for rule in get_all_router_rules(self.r).values():
             for h in extract_hosts(rule):
                 if is_in_zone(h) and h not in EXCLUDE_HOSTS:
                     hosts.add(h)
         return hosts
 
-    def sync_all(self):
-        """Full reconciliation: create missing, delete removed (if enabled)."""
+    def sync_all(self) -> None:
         desired = self.desired_hosts()
-        owned = cf_list_records(self.zone_id)
+        owned   = cf_list_records(self.zone_id)
 
-        # Create missing
         for host in desired:
             if host not in owned:
                 try:
@@ -169,7 +162,6 @@ class DnsSync:
             else:
                 log.debug(f"Record already exists: {host}")
 
-        # Delete removed (only records we own)
         if CF_AUTO_DELETE:
             for name, rec in owned.items():
                 if name not in desired:
@@ -178,62 +170,72 @@ class DnsSync:
                     except Exception as e:
                         log.error(f"Failed to delete {name}: {e}")
 
-    def watch(self):
-        """Subscribe to Redis keyspace events and react to router rule changes."""
-        pubsub = self.r.pubsub()
-        channel = f"__keyevent@0__:set"
-        pubsub.subscribe(channel)
-        pubsub.subscribe("__keyevent@0__:del")
-        pubsub.subscribe("__keyevent@0__:expired")
-        log.info("Subscribed to Redis keyspace events")
-
-        for message in pubsub.listen():
-            if message["type"] != "message":
-                continue
-            key = message["data"]
-            # Only care about router rule keys
-            if not re.match(rf"^{re.escape(REDIS_ROOT_KEY)}/http/routers/[^/]+/rule$", key):
-                continue
-            log.debug(f"Keyspace event for: {key}")
-            # Small debounce — wait briefly for any related keys
-            time.sleep(0.5)
+    def watch(self) -> None:
+        """Subscribe to Redis keyspace events with automatic reconnect."""
+        while True:
             try:
-                self.sync_all()
+                pubsub = self.r.pubsub()
+                pubsub.subscribe(
+                    "__keyevent@0__:set",
+                    "__keyevent@0__:del",
+                    "__keyevent@0__:expired",
+                )
+                log.info("Subscribed to Redis keyspace events")
+
+                for message in pubsub.listen():
+                    if message["type"] != "message":
+                        continue
+                    key = message["data"]
+                    if not ROUTER_RE.match(key):
+                        continue
+                    log.debug(f"Keyspace event: {key}")
+                    time.sleep(0.5)  # debounce
+                    try:
+                        self.sync_all()
+                    except Exception as e:
+                        log.error(f"sync_all failed: {e}")
+
+            except redis.exceptions.ConnectionError as e:
+                log.warning(f"Redis pubsub disconnected: {e} — reconnecting in 5s")
+                time.sleep(5)
             except Exception as e:
-                log.error(f"sync_all failed: {e}")
+                log.error(f"Unexpected error in watch loop: {e} — reconnecting in 5s")
+                time.sleep(5)
 
-def main():
+# ── Entrypoint ────────────────────────────────────────────────────────────────
+def main() -> None:
     log.info("traefik-dns-sync starting")
-    log.info(f"  Zone: {CF_ZONE_NAME}")
+    log.info(f"  Zone:        {CF_ZONE_NAME}")
     log.info(f"  CNAME target: {CNAME_TARGET}")
-    log.info(f"  Proxied: {CF_PROXIED}")
+    log.info(f"  Proxied:     {CF_PROXIED}")
     log.info(f"  Auto-delete: {CF_AUTO_DELETE}")
-    log.info(f"  Exclude: {EXCLUDE_HOSTS or '(none)'}")
+    log.info(f"  Exclude:     {EXCLUDE_HOSTS or '(none)'}")
 
-    # Connect with retry
+    # Redis connect with retry
     r = None
-    for attempt in range(10):
+    for attempt in range(1, 11):
         try:
             r = make_redis()
             r.ping()
             log.info(f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
             break
         except Exception as e:
-            log.warning(f"Redis not ready ({e}), retrying in 3s...")
+            log.warning(f"Redis not ready (attempt {attempt}/10): {e} — retrying in 3s")
             time.sleep(3)
     else:
         raise RuntimeError("Could not connect to Redis after 10 attempts")
 
     enable_keyspace_notifications(r)
 
-    sync = DnsSync()
+    zone_id = cf_get_zone_id()
+    log.info(f"Cloudflare zone ID: {zone_id}")
 
-    # Initial full sync on startup
+    sync = DnsSync(r, zone_id)
+
     log.info("Running initial sync...")
     sync.sync_all()
-    log.info("Initial sync complete")
+    log.info("Initial sync complete — watching for changes")
 
-    # Watch for changes
     sync.watch()
 
 if __name__ == "__main__":
