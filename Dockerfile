@@ -18,4 +18,4 @@ COPY --from=builder /install/lib /usr/local/lib
 
 COPY sync.py .
 
-ENTRYPOINT ["python", "sync.py"]
+ENTRYPOINT ["python3.11", "sync.py"]
