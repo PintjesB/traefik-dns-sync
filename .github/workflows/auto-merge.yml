@@ -1,0 +1,23 @@
+name: Auto-merge Dependabot PRs
+
+on:
+  pull_request:
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Auto-merge
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+The full flow then becomes:
+```
+Dependabot opens PR → docker.yml builds image → if build passes → auto-merge.yml merges PR → docker.yml runs again on main → pushes new :latest image to ghcr.io
