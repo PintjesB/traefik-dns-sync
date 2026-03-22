@@ -24,13 +24,13 @@
 
       # Cloudflare
       CF_API_TOKEN: ${CF_API_TOKEN}
-      CF_ZONE_NAME: tristandk.be
-      CNAME_TARGET: gent.tristandk.be   # What all CNAMEs point to
+      CF_ZONE_NAME: domain.com
+      CNAME_TARGET: gent.domain.com   # What all CNAMEs point to
 
       # Behaviour
       CF_PROXIED: "true"                # Orange cloud on/off
       CF_AUTO_DELETE: "false"           # Delete records when route removed
-      EXCLUDE_HOSTS: "traefik.tristandk.be,traefik-ingress-02.tristandk.be,traefik-ingress-03.tristandk.be"
+      EXCLUDE_HOSTS: "traefik.domain.com,traefik-ingress-02.domain.com,traefik-ingress-03.domain.com"
       LOG_LEVEL: INFO
     networks:
       - frontend-net
@@ -45,8 +45,8 @@
 | REDIS_PASSWORD | | - | Redis password |
 | REDIS_ROOT_KEY | | traefik | Must match Traefik's rootKey |
 | CF_API_TOKEN | ✅ | - | Cloudflare API token (DNS edit) |
-| CF_ZONE_NAME | ✅ | - | e.g. tristandk.be |
-| CNAME_TARGET | ✅ | - | e.g. gent.tristandk.be |
+| CF_ZONE_NAME | ✅ | - | e.g. domain.com |
+| CNAME_TARGET | ✅ | - | e.g. gent.domain.com |
 | CF_PROXIED | | true | Orange cloud toggle |
 | CF_AUTO_DELETE | | false | Delete records when route removed |
 | EXCLUDE_HOSTS | | - | Comma-separated hostnames to ignore |
