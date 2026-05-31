@@ -58,3 +58,5 @@
 - Manually edited records are never deleted or modified
 - Reacts instantly via Redis pub/sub, no polling interval
 - Run only once (not on every ingress node) — one instance per Redis master is enough
+
+#
