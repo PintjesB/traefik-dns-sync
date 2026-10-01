@@ -4,9 +4,23 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "Dockerfile"
+      - "requirements.txt"
+      - "sync.py"
+      - "*dockerignore"
+      - ".github/workflows/docker.yml"
+      - ".github/workflows/auto-tag.yml"
   pull_request:
     branches:
       - main
+    paths:
+      - "Dockerfile"
+      - "requirements.txt"
+      - "sync.py"
+      - "*dockerignore"
+      - ".github/workflows/docker.yml"
+      - ".github/workflows/auto-tag.yml"
 
 concurrency:
   group: docker-${{ github.head_ref || github.ref_name }}
