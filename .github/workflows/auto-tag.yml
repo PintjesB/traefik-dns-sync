@@ -1,90 +1,143 @@
 name: Auto Tag
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - Build and Push Docker Image
+    types:
+      - completed
     branches:
       - main
 
+concurrency:
+  group: auto-tag-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   tag:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Checkout
+      - name: Checkout validated revision
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
           token: ${{ secrets.PAT_TOKEN }}
 
       - name: Get latest tag
         id: get_tag
+        shell: bash
         run: |
+          set -euo pipefail
           git fetch --tags
-          LATEST=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
-          if [ -z "$LATEST" ]; then
-            echo "latest=none" >> $GITHUB_OUTPUT
+          latest="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+          if [ -z "$latest" ]; then
+            echo "latest=none" >> "$GITHUB_OUTPUT"
           else
-            echo "latest=${LATEST}" >> $GITHUB_OUTPUT
+            echo "latest=$latest" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Determine bump type
         id: bump
+        shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          LATEST: ${{ steps.get_tag.outputs.latest }}
         run: |
-          LATEST=${{ steps.get_tag.outputs.latest }}
-
+          set -euo pipefail
           if [ "$LATEST" = "none" ]; then
-            COMMITS=$(git log --pretty=format:"%s")
+            commits="$(git log "$HEAD_SHA" --pretty=format:'%s')"
           else
-            COMMITS=$(git log ${LATEST}..HEAD --pretty=format:"%s")
+            commits="$(git log "$LATEST..$HEAD_SHA" --pretty=format:'%s')"
           fi
 
-          echo "Commits since ${LATEST}:"
-          echo "$COMMITS"
+          printf 'Commits since %s:\n%s\n' "$LATEST" "$commits"
 
-          if echo "$COMMITS" | grep -qiE '^(feat!|fix!|refactor!|BREAKING CHANGE)'; then
-            echo "type=major" >> $GITHUB_OUTPUT
-          elif echo "$COMMITS" | grep -qiE '^feat(\(.+\))?:'; then
-            echo "type=minor" >> $GITHUB_OUTPUT
+          if printf '%s\n' "$commits" | grep -qiE '^(feat!|fix!|refactor!|BREAKING CHANGE)'; then
+            type=major
+          elif printf '%s\n' "$commits" | grep -qiE '^feat(\(.+\))?:'; then
+            type=minor
           else
-            echo "type=patch" >> $GITHUB_OUTPUT
+            type=patch
           fi
+          echo "type=$type" >> "$GITHUB_OUTPUT"
 
       - name: Bump version
         id: version
+        shell: bash
+        env:
+          LATEST: ${{ steps.get_tag.outputs.latest }}
+          TYPE: ${{ steps.bump.outputs.type }}
         run: |
-          LATEST=${{ steps.get_tag.outputs.latest }}
-          TYPE=${{ steps.bump.outputs.type }}
-
+          set -euo pipefail
           if [ "$LATEST" = "none" ]; then
-            case $TYPE in
-              major) NEW="v1.0.0" ;;
-              minor) NEW="v0.1.0" ;;
-              patch) NEW="v0.0.1" ;;
+            case "$TYPE" in
+              major) new="v1.0.0" ;;
+              minor) new="v0.1.0" ;;
+              patch) new="v0.0.1" ;;
             esac
           else
-            VERSION=${LATEST#v}
-            MAJOR=$(echo $VERSION | cut -d. -f1)
-            MINOR=$(echo $VERSION | cut -d. -f2)
-            PATCH=$(echo $VERSION | cut -d. -f3)
-
-            case $TYPE in
-              major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
-              minor) MINOR=$((MINOR+1)); PATCH=0 ;;
-              patch) PATCH=$((PATCH+1)) ;;
+            version="${LATEST#v}"
+            IFS=. read -r major minor patch <<< "$version"
+            case "$TYPE" in
+              major) major=$((major + 1)); minor=0; patch=0 ;;
+              minor) minor=$((minor + 1)); patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
             esac
-
-            NEW="v${MAJOR}.${MINOR}.${PATCH}"
+            new="v${major}.${minor}.${patch}"
           fi
 
-          echo "new=${NEW}" >> $GITHUB_OUTPUT
-          echo "New version: ${NEW} (${TYPE} bump)"
+          plain="${new#v}"
+          major_minor="${plain%.*}"
+          {
+            echo "new=$new"
+            echo "plain=$plain"
+            echo "major_minor=$major_minor"
+          } >> "$GITHUB_OUTPUT"
+          echo "New version: $new ($TYPE bump)"
 
-      - name: Create tag
+      - name: Create Git tag
+        env:
+          NEW_TAG: ${{ steps.version.outputs.new }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ steps.version.outputs.new }}
-          git push origin ${{ steps.version.outputs.new }}
+          git tag "$NEW_TAG" "$HEAD_SHA"
+          git push origin "$NEW_TAG"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Promote validated SHA image to version tags
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          IMAGE: ghcr.io/${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          VERSION: ${{ steps.version.outputs.plain }}
+          MAJOR_MINOR: ${{ steps.version.outputs.major_minor }}
+        run: |
+          set -euo pipefail
+          short_sha="${HEAD_SHA:0:7}"
+          source="${IMAGE}:sha-${short_sha}"
+
+          docker buildx imagetools inspect "$source" >/dev/null
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${VERSION}" \
+            --tag "${IMAGE}:${MAJOR_MINOR}" \
+            "$source"
