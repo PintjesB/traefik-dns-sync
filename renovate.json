@@ -1,3 +1,69 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json"
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":enableVulnerabilityAlertsWithLabel('security')",
+    ":rebaseStalePrs",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/Brussels",
+  "labels": [
+    "renovate"
+  ],
+  "platformAutomerge": false,
+  "automergeType": "pr",
+  "ignoreTests": false,
+  "packageRules": [
+    {
+      "description": "Automerge Python dependency patch updates after CI",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Keep Python dependency minor and major updates manual",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Automerge GitHub Actions digest and patch maintenance after CI",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "pinDigest",
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Keep GitHub Actions minor and major upgrades manual",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Keep Docker base-image changes manual",
+      "matchDatasources": [
+        "docker"
+      ],
+      "automerge": false
+    }
+  ]
 }
