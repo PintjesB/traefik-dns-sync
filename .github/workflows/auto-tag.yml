@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout validated revision
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
@@ -60,11 +60,11 @@ jobs:
           printf 'Commits since %s:\n%s\n' "$LATEST" "$commits"
 
           if printf '%s\n' "$commits" | grep -qiE '^(feat!|fix!|refactor!|BREAKING CHANGE)'; then
-            type=major
+            type="major"
           elif printf '%s\n' "$commits" | grep -qiE '^feat(\(.+\))?:'; then
-            type=minor
+            type="minor"
           else
-            type=patch
+            type="patch"
           fi
           echo "type=$type" >> "$GITHUB_OUTPUT"
 
@@ -114,14 +114,14 @@ jobs:
           git push origin "$NEW_TAG"
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Promote validated SHA image to version tags
         shell: bash
