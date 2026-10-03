@@ -50,5 +50,20 @@
       "automerge": false
     }
   ],
-  "pinDigests": true
+  "pinDigests": true,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the digest-pinned actionlint Docker image used by workflow lint",
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/workflow-lint\\.yml$/"
+      ],
+      "matchStrings": [
+        "ACTIONLINT_IMAGE:\\\\s*\\\"rhysd/actionlint:(?<currentValue>[^@\\\"]+)@(?<currentDigest>sha256:[a-f0-9]{64})\\\""
+      ],
+      "depNameTemplate": "rhysd/actionlint",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
+    }
+  ]
 }
