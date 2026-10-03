@@ -132,11 +132,12 @@ jobs:
           MAJOR_MINOR: ${{ steps.version.outputs.major_minor }}
         run: |
           set -euo pipefail
+          image="${IMAGE,,}"
           short_sha="${HEAD_SHA:0:7}"
-          source="${IMAGE}:sha-${short_sha}"
+          source="${image}:sha-${short_sha}"
 
           docker buildx imagetools inspect "$source" >/dev/null
           docker buildx imagetools create \
-            --tag "${IMAGE}:${VERSION}" \
-            --tag "${IMAGE}:${MAJOR_MINOR}" \
+            --tag "${image}:${VERSION}" \
+            --tag "${image}:${MAJOR_MINOR}" \
             "$source"
