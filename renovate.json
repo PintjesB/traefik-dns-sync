@@ -59,7 +59,7 @@
         "/^\\.github\\/workflows\\/workflow-lint\\.yml$/"
       ],
       "matchStrings": [
-        "ACTIONLINT_IMAGE:\\\\s*\\\"rhysd/actionlint:(?<currentValue>[^@\\\"]+)@(?<currentDigest>sha256:[a-f0-9]{64})\\\""
+        "ACTIONLINT_IMAGE: \"rhysd/actionlint:(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[a-f0-9]{64})\""
       ],
       "depNameTemplate": "rhysd/actionlint",
       "datasourceTemplate": "docker",
