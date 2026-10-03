@@ -5,12 +5,14 @@ on:
     paths:
       - "renovate.json"
       - ".github/workflows/renovate-config.yml"
+      - ".github/workflows/workflow-lint.yml"
   push:
     branches:
       - main
     paths:
       - "renovate.json"
       - ".github/workflows/renovate-config.yml"
+      - ".github/workflows/workflow-lint.yml"
 
 concurrency:
   group: renovate-config-${{ github.head_ref || github.ref_name }}
@@ -31,3 +33,30 @@ jobs:
 
       - name: Validate Renovate configuration
         run: npx --yes --package renovate -- renovate-config-validator --strict
+
+      - name: Verify managed actionlint reference
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const config = JSON.parse(fs.readFileSync("renovate.json", "utf8"));
+          const manager = (config.customManagers || []).find(
+            (item) => item.depNameTemplate === "rhysd/actionlint"
+          );
+          if (!manager) throw new Error("actionlint custom manager is missing");
+          if (manager.datasourceTemplate !== "docker") {
+            throw new Error("actionlint must use the Docker datasource");
+          }
+          const pattern = new RegExp(manager.matchStrings[0]);
+          const workflow = fs.readFileSync(".github/workflows/workflow-lint.yml", "utf8");
+          const match = workflow.match(pattern);
+          if (!match?.groups?.currentValue) {
+            throw new Error("actionlint version is not captured by Renovate");
+          }
+          if (!/^sha256:[a-f0-9]{64}$/.test(match.groups.currentDigest || "")) {
+            throw new Error("actionlint digest is not captured by Renovate");
+          }
+          console.log(
+            `Renovate captures actionlint ${match.groups.currentValue}@${match.groups.currentDigest}`
+          );
+          NODE
