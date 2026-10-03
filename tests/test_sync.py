@@ -28,7 +28,7 @@ class FakeRedis:
 class SyncTests(unittest.TestCase):
     def test_extract_hosts_handles_multiple_hosts(self):
         self.assertEqual(
-            sync.extract_hosts("Host(\`a.example.com\`) || Host(\`b.example.com\`)"),
+            sync.extract_hosts("Host(`a.example.com`) || Host(`b.example.com`)"),
             ["a.example.com", "b.example.com"],
         )
 
@@ -42,8 +42,8 @@ class SyncTests(unittest.TestCase):
 
     def test_router_rules_are_read_with_scan(self):
         redis = FakeRedis({
-            "traefik/http/routers/a/rule": "Host(\`a.example.com\`)",
-            "traefik/http/routers/b/rule": "Host(\`b.example.com\`)",
+            "traefik/http/routers/a/rule": "Host(`a.example.com`)",
+            "traefik/http/routers/b/rule": "Host(`b.example.com`)",
         })
         rules = sync.get_all_router_rules(redis)
         self.assertEqual(set(rules), set(redis.values))
@@ -53,9 +53,9 @@ class SyncTests(unittest.TestCase):
     @mock.patch.object(sync, "get_all_router_rules")
     def test_desired_hosts_filters_zone_and_exclusions(self, get_rules):
         get_rules.return_value = {
-            "a": "Host(\`api.example.com\`)",
-            "b": "Host(\`skip.example.com\`)",
-            "c": "Host(\`outside.test\`)",
+            "a": "Host(`api.example.com`)",
+            "b": "Host(`skip.example.com`)",
+            "c": "Host(`outside.test`)",
         }
         desired = sync.DnsSync(mock.Mock(), "zone").desired_hosts()
         self.assertEqual(desired, {"api.example.com"})
