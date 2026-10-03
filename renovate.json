@@ -36,25 +36,9 @@
       "automerge": false
     },
     {
-      "description": "Automerge GitHub Actions digest and patch maintenance after CI",
+      "description": "Keep GitHub Actions updates manual because tagging and publishing are privileged",
       "matchManagers": [
         "github-actions"
-      ],
-      "matchUpdateTypes": [
-        "digest",
-        "pinDigest",
-        "patch"
-      ],
-      "automerge": true
-    },
-    {
-      "description": "Keep GitHub Actions minor and major upgrades manual",
-      "matchManagers": [
-        "github-actions"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "major"
       ],
       "automerge": false
     },
