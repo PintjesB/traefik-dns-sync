@@ -83,6 +83,34 @@ jobs:
           cache-to: type=gha,mode=min
           platforms: linux/amd64,linux/arm64
 
+      - name: Build native image for scan and smoke tests
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: traefik-dns-sync:ci
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
+          platforms: linux/amd64
+
+      - name: Scan built image for HIGH/CRITICAL CVEs
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: traefik-dns-sync:ci
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Smoke test application in the built image
+        run: >-
+          docker run --rm --entrypoint python
+          --volume "${{ github.workspace }}/tests:/tests:ro"
+          traefik-dns-sync:ci -m unittest discover -s /tests -v
+
   publish:
     name: Publish image
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

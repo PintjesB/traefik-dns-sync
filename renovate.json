@@ -15,7 +15,7 @@
   "ignoreTests": false,
   "packageRules": [
     {
-      "description": "Automerge Python dependency patch updates after CI",
+      "description": "Automerge Python dependency patches after CI",
       "matchManagers": [
         "pip_requirements"
       ],
@@ -25,29 +25,142 @@
       "automerge": true
     },
     {
-      "description": "Keep Python dependency minor and major updates manual",
+      "description": "Automerge stable Python and npm minors after CI",
       "matchManagers": [
         "pip_requirements"
       ],
       "matchUpdateTypes": [
+        "minor"
+      ],
+      "matchCurrentVersion": "/^[1-9]\\d*\\.\\d+(?:\\.\\d+)?$/",
+      "automerge": true
+    },
+    {
+      "description": "Automerge explicitly tested validation Actions after CI",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "actions/setup-python",
+        "aquasecurity/trivy-action"
+      ],
+      "matchUpdateTypes": [
+        "patch",
         "minor",
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Automerge actionlint updates exercised by workflow lint",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "rhysd/actionlint"
+      ],
+      "matchFileNames": [
+        ".github/workflows/workflow-lint.yml"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "minor",
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Automerge covered stateless image patches and immutable pins after CI",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchFileNames": [
+        "Dockerfile"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "Keep untested and privileged GitHub Actions manual",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "!actions/setup-python",
+        "!aquasecurity/trivy-action"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Keep CI runtime toolchains manual",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "python",
+        "node"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "Require Dependency Dashboard approval for stateful database and datastore images",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "/^(?:[^/]+\\/)*(?:postgres|postgresql|redis|valkey|mariadb|mysql|mongo|mongodb|elasticsearch|opensearch|influxdb|clickhouse|cockroachdb|couchdb|timescaledb|postgres-documentdb)$/",
+        "mcr.microsoft.com/mssql/server"
+      ],
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Keep pre-1.0 and prerelease dependency minors manual",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "matchCurrentVersion": "!/^[1-9]\\d*\\.\\d+(?:\\.\\d+)?$/",
+      "automerge": false
+    },
+    {
+      "description": "Keep major dependency updates manual",
+      "matchUpdateTypes": [
         "major"
       ],
       "automerge": false
     },
     {
-      "description": "Keep GitHub Actions updates manual because tagging and publishing are privileged",
+      "description": "Keep image packaging tooling manual",
       "matchManagers": [
-        "github-actions"
+        "pip_requirements"
+      ],
+      "matchPackageNames": [
+        "setuptools"
       ],
       "automerge": false
     },
     {
-      "description": "Keep Docker base-image changes manual",
-      "matchDatasources": [
-        "docker"
+      "description": "Keep manual updates out of automatic dependency groups",
+      "matchJsonata": [
+        "automerge = false"
       ],
-      "automerge": false
+      "groupName": null,
+      "groupSlug": null
     }
   ],
   "pinDigests": true,
@@ -65,5 +178,12 @@
       "datasourceTemplate": "docker",
       "versioningTemplate": "docker"
     }
-  ]
+  ],
+  "automerge": false,
+  "internalChecksAsSuccess": false,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": false,
+    "groupName": null
+  }
 }
