@@ -5,6 +5,7 @@ on:
     paths:
       - "renovate.json"
       - ".github/workflows/renovate-config.yml"
+      - ".github/workflows/docker.yml"
       - ".github/workflows/workflow-lint.yml"
   push:
     branches:
@@ -12,6 +13,7 @@ on:
     paths:
       - "renovate.json"
       - ".github/workflows/renovate-config.yml"
+      - ".github/workflows/docker.yml"
       - ".github/workflows/workflow-lint.yml"
 
 concurrency:
@@ -59,4 +61,86 @@ jobs:
           console.log(
             `Renovate captures actionlint ${match.groups.currentValue}@${match.groups.currentDigest}`
           );
+          NODE
+      - name: Exercise effective Renovate policy
+        shell: bash
+        run: |
+          npx --yes --package renovate -- node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { pathToFileURL } from 'node:url';
+          // Test Renovate itself, including inherited presets; no imitation matcher.
+          const bin = process.env.PATH.split(path.delimiter)
+            .map(dir => path.join(dir, 'renovate-config-validator')).find(file => fs.existsSync(file));
+          assert.ok(bin, 'Run with npx --package renovate');
+          const dist = path.dirname(fs.realpathSync(bin));
+          const load = file => import(pathToFileURL(path.join(dist, file)));
+          const { init } = await load('logger/index.js');
+          await init();
+          const { applyPackageRules } = await load('util/package-rules/index.js');
+          const { resolveConfigPresets } = await load('config/presets/index.js');
+          const raw = JSON.parse(fs.readFileSync('renovate.json', 'utf8'));
+          const resolved = await resolveConfigPresets(raw);
+          const config = resolved.config ?? resolved;
+          const cases = [];
+          const add = (manager, depName, updateType, want, packageFile, version = '1.2.3', datasource) =>
+            cases.push([{ manager, depName, packageName: depName, updateType, packageFile,
+              datasource: datasource ?? ({npm:'npm', 'github-actions':'github-tags', 'dockerfile':'docker',
+                'custom.regex':'docker'}[manager] ?? 'pypi'),
+              sourceUrl: ['react','react-dom'].includes(depName) ? 'https://github.com/facebook/react' :
+              ['vitest','@vitest/coverage-v8'].includes(depName) ? 'https://github.com/vitest-dev/vitest' : undefined,
+              currentValue: version, currentVersion: version, lockedVersion: version, versioning: 'semver' }, want]);
+          const routine = ['patch', 'minor', 'pin', 'pinDigest', 'digest'];
+          for (const [manager, file] of [["pip_requirements", "requirements.txt"]]) {
+            for (const [update, want, version] of [['patch',true,'0.3.0'], ['minor',true,'1.2.3'],
+              ['minor',false,'0.3.0'], ['major',false,'1.2.3'], ['minor',false,'1.2.3-beta.1']]) {
+              add(manager, manager === 'npm' ? 'patchright' : 'redis', update, want, file, version);
+            }
+            if (manager === 'npm') {
+              add(manager, 'react', 'minor', true, file);
+              add(manager, undefined, 'lockFileMaintenance', true, file);
+            } else if (manager === 'pip-compile') add(manager, undefined, 'lockFileMaintenance', false, file);
+          }
+          for (const pkg of ["actions/setup-python", "aquasecurity/trivy-action"]) {
+            for (const update of routine) add('github-actions', pkg, update, true, '.github/workflows/renovate-config.yml');
+          }
+          for (const pkg of ["actions/checkout", "docker/setup-buildx-action", "docker/login-action", "docker/build-push-action", "docker/metadata-action", "unreviewed/validation-action", "python", "node"]) {
+            for (const update of [...routine, 'major']) add('github-actions', pkg, update, false, '.github/workflows/ci.yml');
+          }
+          for (const pkg of ["python"]) {
+            for (const update of ['patch','pin','pinDigest','digest']) add('dockerfile', pkg, update, true, 'Dockerfile');
+            for (const update of ['minor','major']) add('dockerfile', pkg, update, false, 'Dockerfile');
+          }
+          for (const update of routine) add('pip_requirements', 'setuptools', update, false, 'requirements.txt');
+          for (const update of routine) add('custom.regex', 'rhysd/actionlint', update, true, '.github/workflows/workflow-lint.yml');
+          for (const pkg of ['postgres','redis','ghcr.io/example/postgres','mcr.microsoft.com/mssql/server','unreviewed/image']) {
+            for (const update of [...routine,'major']) add('dockerfile', pkg, update, false, 'Dockerfile');
+          }
+          for (const pkg of []) {
+            for (const update of [...routine,'major']) add(['@openai/codex','chromatic'].includes(pkg) ? 'npm' : 'custom.regex',
+              pkg, update, false, "Dockerfile", '1.2.3', ['@openai/codex','chromatic'].includes(pkg) ? 'npm' : 'github-releases');
+          }
+          add('unknown-manager', 'unknown/package', 'patch', false, 'unknown');
+          const failures = [];
+          for (const [dependency, want] of cases) {
+            const result = await applyPackageRules({ ...config, ...dependency });
+            const label = `${dependency.manager} ${dependency.depName} ${dependency.updateType} ${dependency.currentVersion}`;
+            if (result.automerge !== want) failures.push(`${label}: expected automerge=${want}, got ${result.automerge}`);
+            if (!want && result.groupName != null) failures.push(`${label}: mixed group ${result.groupName}`);
+            if (result.ignoreTests !== false || result.platformAutomerge !== false || result.automergeType !== 'pr' || result.internalChecksAsSuccess === true) failures.push(`${label}: CI bypass`);
+            if (dependency.datasource === 'docker' && ['postgres','redis','ghcr.io/example/postgres','mcr.microsoft.com/mssql/server'].includes(dependency.depName)) {
+              if (result.dependencyDashboardApproval !== true) failures.push(`${label}: stateful approval missing`);
+            }
+          }
+          for (const key of ['automerge','platformAutomerge','ignoreTests']) assert.equal(raw[key], false);
+          assert.notEqual(config.internalChecksAsSuccess, true);
+          assert.ok(!(raw.packageRules || []).some(rule => rule.ignoreTests === true || rule.platformAutomerge === true || rule.internalChecksAsSuccess === true));
+          assert.deepEqual(failures, [], failures.join('\n'));
+          console.log(`Verified ${cases.length} effective dependency cases with Renovate`);
+          const workflow = fs.readFileSync('.github/workflows/docker.yml', 'utf8');
+          const prBuild = workflow.split('  build:')[1].split('  publish:')[0];
+          assert.ok(prBuild.includes('exit-code: "1"'), 'PR image scan must block');
+          assert.ok(prBuild.includes('severity: HIGH,CRITICAL'));
+          assert.ok(prBuild.includes('traefik-dns-sync:ci -m unittest discover -s /tests -v'), 'Built image must run application tests');
           NODE
