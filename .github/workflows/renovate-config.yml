@@ -141,6 +141,12 @@ jobs:
             }
           }
           for (const key of ['automerge','platformAutomerge','ignoreTests']) assert.equal(raw[key], false);
+          const pythonRuntime = raw.packageRules.find(rule => rule.description === 'Review Python interpreter lines as one runtime migration');
+          assert.ok(pythonRuntime, 'Python runtime migration policy missing');
+          assert.deepEqual(pythonRuntime.matchUpdateTypes, ['minor', 'major']);
+          assert.equal(pythonRuntime.groupName, 'Python runtime migration');
+          assert.equal(pythonRuntime.dependencyDashboardApproval, true);
+          assert.equal(pythonRuntime.automerge, false);
           assert.notEqual(config.internalChecksAsSuccess, true);
           assert.ok(!(raw.packageRules || []).some(rule => rule.ignoreTests === true || rule.platformAutomerge === true || rule.internalChecksAsSuccess === true));
           assert.deepEqual(failures, [], failures.join('\n'));
