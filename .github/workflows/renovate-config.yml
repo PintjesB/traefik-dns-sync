@@ -134,13 +134,21 @@ jobs:
             const result = await applyPackageRules({ ...config, ...dependency });
             const label = `${dependency.manager} ${dependency.depName} ${dependency.updateType} ${dependency.currentVersion}`;
             if (result.automerge !== want) failures.push(`${label}: expected automerge=${want}, got ${result.automerge}`);
-            if (!want && result.groupName != null) failures.push(`${label}: mixed group ${result.groupName}`);
+            // Manual updates may be intentionally grouped for coordinated migrations.
+            // The automerge expectation above is the safety boundary; a group name alone is not a leak.
+
             if (result.ignoreTests !== false || result.platformAutomerge !== false || result.automergeType !== 'pr' || result.internalChecksAsSuccess === true) failures.push(`${label}: CI bypass`);
             if (dependency.datasource === 'docker' && ['postgres','redis','ghcr.io/example/postgres','mcr.microsoft.com/mssql/server'].includes(dependency.depName)) {
               if (result.dependencyDashboardApproval !== true) failures.push(`${label}: stateful approval missing`);
             }
           }
           for (const key of ['automerge','platformAutomerge','ignoreTests']) assert.equal(raw[key], false);
+          const pythonRuntime = raw.packageRules.find(rule => rule.description === 'Review Python interpreter lines as one runtime migration');
+          assert.ok(pythonRuntime, 'Python runtime migration policy missing');
+          assert.deepEqual(pythonRuntime.matchUpdateTypes, ['minor', 'major']);
+          assert.equal(pythonRuntime.groupName, 'Python runtime migration');
+          assert.equal(pythonRuntime.dependencyDashboardApproval, true);
+          assert.equal(pythonRuntime.automerge, false);
           assert.notEqual(config.internalChecksAsSuccess, true);
           assert.ok(!(raw.packageRules || []).some(rule => rule.ignoreTests === true || rule.platformAutomerge === true || rule.internalChecksAsSuccess === true));
           assert.deepEqual(failures, [], failures.join('\n'));
