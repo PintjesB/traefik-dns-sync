@@ -135,8 +135,8 @@ jobs:
             const label = `${dependency.manager} ${dependency.depName} ${dependency.updateType} ${dependency.currentVersion}`;
             if (result.automerge !== want) failures.push(`${label}: expected automerge=${want}, got ${result.automerge}`);
             const mergeLabels = result.addLabels ?? [];
-            const expectedMergeLabel = want ? 'renovate:auto-merge' : 'renovate:manual-merge';
-            const unexpectedMergeLabel = want ? 'renovate:manual-merge' : 'renovate:auto-merge';
+            const expectedMergeLabel = want ? 'auto merge' : 'manual merge';
+            const unexpectedMergeLabel = want ? 'manual merge' : 'auto merge';
             if (!mergeLabels.includes(expectedMergeLabel)) failures.push(`${label}: missing ${expectedMergeLabel}`);
             if (mergeLabels.includes(unexpectedMergeLabel)) failures.push(`${label}: conflicting merge-status label ${unexpectedMergeLabel}`);
             // Manual updates may be intentionally grouped for coordinated migrations.
