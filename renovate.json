@@ -161,6 +161,20 @@
       ],
       "groupName": null,
       "groupSlug": null
+    },
+    {
+      "description": "Review Python interpreter lines as one runtime migration",
+      "matchPackageNames": [
+        "python"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "major"
+      ],
+      "groupName": "Python runtime migration",
+      "groupSlug": "python-runtime-migration",
+      "dependencyDashboardApproval": true,
+      "automerge": false
     }
   ],
   "pinDigests": true,
