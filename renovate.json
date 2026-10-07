@@ -175,6 +175,24 @@
       "groupSlug": "python-runtime-migration",
       "dependencyDashboardApproval": true,
       "automerge": false
+    },
+    {
+      "description": "Label dependency PRs Renovate will auto-merge",
+      "matchJsonata": [
+        "automerge = true"
+      ],
+      "addLabels": [
+        "renovate:auto-merge"
+      ]
+    },
+    {
+      "description": "Label dependency PRs that require manual merge",
+      "matchJsonata": [
+        "automerge = false"
+      ],
+      "addLabels": [
+        "renovate:manual-merge"
+      ]
     }
   ],
   "pinDigests": true,
