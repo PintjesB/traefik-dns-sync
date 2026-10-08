@@ -7,19 +7,14 @@ import time
 import unittest
 import uuid
 
-os.environ.setdefault("REDIS_HOST", "127.0.0.1")
-os.environ.setdefault("CF_API_TOKEN", "integration-test-token")
-os.environ.setdefault("CF_ZONE_NAME", "example.com")
-os.environ.setdefault("CNAME_TARGET", "edge.example.net")
-os.environ.setdefault("EXCLUDE_HOSTS", "skip.example.com")
-
-import sync
-
-
 @unittest.skipUnless(os.getenv("REDIS_INTEGRATION") == "1", "requires disposable Redis in CI")
 class RedisIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Import only when this suite runs; normal unit tests must not depend
+        # on, or mutate, the Redis integration environment.
+        import sync
+        cls.sync = sync
         cls.client = sync.make_redis()
         cls.client.ping()
 
@@ -28,7 +23,7 @@ class RedisIntegrationTests(unittest.TestCase):
         rule = "Host(`redis-ci.example.com`)"
         try:
             self.client.set(key, rule)
-            self.assertEqual(sync.get_all_router_rules(self.client).get(key), rule)
+            self.assertEqual(self.sync.get_all_router_rules(self.client).get(key), rule)
         finally:
             self.client.delete(key)
 
@@ -36,7 +31,7 @@ class RedisIntegrationTests(unittest.TestCase):
         previous = self.client.config_get("notify-keyspace-events").get("notify-keyspace-events", "")
         key = f"traefik/http/routers/ci-{uuid.uuid4().hex}/rule"
         try:
-            sync.enable_keyspace_notifications(self.client)
+            self.sync.enable_keyspace_notifications(self.client)
             current = self.client.config_get("notify-keyspace-events")["notify-keyspace-events"]
             self.assertTrue(set("KEg$x").issubset(set(current)))
             with self.client.pubsub() as pubsub:
