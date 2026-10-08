@@ -184,19 +184,6 @@
       "minimumReleaseAge": "3 days"
     },
     {
-      "description": "Hold Redis client minor updates until real Redis integration coverage exists",
-      "matchManagers": [
-        "pip_requirements"
-      ],
-      "matchPackageNames": [
-        "redis"
-      ],
-      "matchUpdateTypes": [
-        "minor"
-      ],
-      "automerge": false
-    },
-    {
       "description": "Automerge image packaging tool patches and stable minors validated by Docker CI",
       "matchManagers": [
         "pip_requirements"
