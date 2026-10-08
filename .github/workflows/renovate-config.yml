@@ -136,6 +136,10 @@ jobs:
           assert.equal(raw.statusCheckWhen?.artifactError,'always','Renovate artifact validation must be visible');
           assert.equal(raw.internalChecksFilter,'strict','Do not open unaged npm release branches');
           assert.ok(raw.packageRules.some(rule => rule.matchDatasources?.includes('npm') && rule.minimumReleaseAge === '3 days'), 'npm release cooldown must be configured');
+          for (const update of ['patch','minor','pin','pinDigest','digest']) {
+            add('github-actions','redis',update,true,'.github/workflows/docker.yml','7.4.11','docker');
+          }
+          add('github-actions','redis','major',false,'.github/workflows/docker.yml','7.4.11','docker');
           const failures = [];
           for (const [dependency, want] of cases) {
             const result = await applyPackageRules({ ...config, ...dependency });
