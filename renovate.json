@@ -3,7 +3,6 @@
   "extends": [
     "config:recommended",
     ":enableVulnerabilityAlertsWithAdditionalLabel(security)",
-    ":rebaseStalePrs",
     "helpers:pinGitHubActionDigests"
   ],
   "timezone": "Europe/Brussels",
@@ -12,6 +11,7 @@
   ],
   "platformAutomerge": false,
   "automergeType": "pr",
+  "rebaseWhen": "automerging",
   "ignoreTests": false,
   "packageRules": [
     {
