@@ -107,6 +107,44 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(set(records), {"a.example.com", "b.example.com"})
         self.assertEqual(request.call_count, 2)
 
+    def test_watch_recovers_from_pubsub_disconnect_and_processes_events(self):
+        """Exercise the real forever-loop reconnect path without Cloudflare I/O."""
+        class StopWatch(BaseException):
+            pass
+
+        client = mock.Mock()
+        disconnected = mock.Mock()
+        disconnected.listen.side_effect = sync.redis.exceptions.ConnectionError(
+            "simulated pubsub disconnect"
+        )
+        restored = mock.Mock()
+        restored.listen.return_value = iter([
+            {"type": "subscribe", "data": 1},
+            {
+                "type": "message",
+                "data": "traefik/http/routers/redis-reconnect/rule",
+            },
+        ])
+        client.pubsub.side_effect = [disconnected, restored]
+
+        with mock.patch.object(sync.time, "sleep") as sleep, mock.patch.object(
+            sync.DnsSync, "sync_all", side_effect=StopWatch
+        ) as sync_all:
+            with self.assertRaises(StopWatch):
+                sync.DnsSync(client, "ci-zone").watch()
+
+        self.assertEqual(client.pubsub.call_count, 2)
+        channels = (
+            "__keyevent@0__:set",
+            "__keyevent@0__:del",
+            "__keyevent@0__:expired",
+        )
+        disconnected.subscribe.assert_called_once_with(*channels)
+        restored.subscribe.assert_called_once_with(*channels)
+        sync_all.assert_called_once_with()
+        sleep.assert_any_call(5)
+        sleep.assert_any_call(0.5)
+
     @mock.patch.object(sync, "_cf_request")
     def test_zone_lookup_rejects_missing_zone(self, request):
         request.return_value = {"result": []}
