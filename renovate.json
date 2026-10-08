@@ -198,6 +198,27 @@
       "automerge": true
     },
     {
+      "description": "Automatically update the disposable Redis CI service after live integration tests",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "redis"
+      ],
+      "matchFileNames": [
+        ".github/workflows/docker.yml"
+      ],
+      "matchUpdateTypes": [
+        "patch",
+        "minor",
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
+      "automerge": true,
+      "dependencyDashboardApproval": false
+    },
+    {
       "description": "Label dependency PRs Renovate will auto-merge",
       "matchJsonata": [
         "automerge = true"
