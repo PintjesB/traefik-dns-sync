@@ -99,7 +99,7 @@ jobs:
               currentValue: version, currentVersion: version, lockedVersion: version, versioning: 'semver' }, want]);
           const routine = ['patch', 'minor', 'pin', 'pinDigest', 'digest'];
           for (const [manager, file] of [["pip_requirements", "requirements.txt"]]) {
-            for (const [update, want, version] of [['patch',true,'0.3.0'], ['minor',true,'1.2.3'],
+            for (const [update, want, version] of [['patch',true,'0.3.0'], ['minor',false,'1.2.3'],
               ['minor',false,'0.3.0'], ['major',false,'1.2.3'], ['minor',false,'1.2.3-beta.1']]) {
               add(manager, manager === 'npm' ? 'patchright' : 'redis', update, want, file, version);
             }
@@ -119,7 +119,7 @@ jobs:
             for (const update of ['patch','pin','pinDigest','digest']) add('dockerfile', pkg, update, true, 'Dockerfile');
             for (const update of ['minor','major']) add('dockerfile', pkg, update, false, 'Dockerfile');
           }
-          for (const update of routine) add('pip_requirements', 'setuptools', update, false, 'requirements.txt');
+          for (const update of routine) add('pip_requirements', 'setuptools', update, ['patch','minor'].includes(update), 'requirements.txt');
           for (const update of routine) add('custom.regex', 'rhysd/actionlint', update, true, '.github/workflows/workflow-lint.yml');
           for (const pkg of ['postgres','redis','ghcr.io/example/postgres','mcr.microsoft.com/mssql/server','unreviewed/image']) {
             for (const update of [...routine,'major']) add('dockerfile', pkg, update, false, 'Dockerfile');
@@ -129,6 +129,13 @@ jobs:
               pkg, update, false, "Dockerfile", '1.2.3', ['@openai/codex','chromatic'].includes(pkg) ? 'npm' : 'github-releases');
           }
           add('unknown-manager', 'unknown/package', 'patch', false, 'unknown');
+          add('pip_requirements', 'redis', 'patch', true, 'requirements.txt', '5.3.1');
+          add('pip_requirements', 'redis', 'minor', false, 'requirements.txt', '5.3.1');
+          add('pip_requirements', 'redis', 'major', false, 'requirements.txt', '5.3.1');
+          add('pip_requirements', 'setuptools', 'minor', true, 'requirements.txt', '82.0.0');
+          assert.equal(raw.statusCheckWhen?.artifactError,'always','Renovate artifact validation must be visible');
+          assert.equal(raw.internalChecksFilter,'strict','Do not open unaged npm release branches');
+          assert.ok(raw.packageRules.some(rule => rule.matchDatasources?.includes('npm') && rule.minimumReleaseAge === '3 days'), 'npm release cooldown must be configured');
           const failures = [];
           for (const [dependency, want] of cases) {
             const result = await applyPackageRules({ ...config, ...dependency });
