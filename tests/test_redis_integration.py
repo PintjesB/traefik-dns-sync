@@ -11,6 +11,7 @@ os.environ.setdefault("REDIS_HOST", "127.0.0.1")
 os.environ.setdefault("CF_API_TOKEN", "integration-test-token")
 os.environ.setdefault("CF_ZONE_NAME", "example.com")
 os.environ.setdefault("CNAME_TARGET", "edge.example.net")
+os.environ.setdefault("EXCLUDE_HOSTS", "skip.example.com")
 
 import sync
 
