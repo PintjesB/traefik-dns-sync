@@ -99,7 +99,7 @@ jobs:
               currentValue: version, currentVersion: version, lockedVersion: version, versioning: 'semver' }, want]);
           const routine = ['patch', 'minor', 'pin', 'pinDigest', 'digest'];
           for (const [manager, file] of [["pip_requirements", "requirements.txt"]]) {
-            for (const [update, want, version] of [['patch',true,'0.3.0'], ['minor',false,'1.2.3'],
+            for (const [update, want, version] of [['patch',true,'0.3.0'], ['minor',true,'1.2.3'],
               ['minor',false,'0.3.0'], ['major',false,'1.2.3'], ['minor',false,'1.2.3-beta.1']]) {
               add(manager, manager === 'npm' ? 'patchright' : 'redis', update, want, file, version);
             }
@@ -130,7 +130,7 @@ jobs:
           }
           add('unknown-manager', 'unknown/package', 'patch', false, 'unknown');
           add('pip_requirements', 'redis', 'patch', true, 'requirements.txt', '5.3.1');
-          add('pip_requirements', 'redis', 'minor', false, 'requirements.txt', '5.3.1');
+          add('pip_requirements', 'redis', 'minor', true, 'requirements.txt', '5.3.1');
           add('pip_requirements', 'redis', 'major', false, 'requirements.txt', '5.3.1');
           add('pip_requirements', 'setuptools', 'minor', true, 'requirements.txt', '82.0.0');
           assert.equal(raw.statusCheckWhen?.artifactError,'always','Renovate artifact validation must be visible');
@@ -170,4 +170,6 @@ jobs:
           assert.ok(prBuild.includes('exit-code: "1"'), 'PR image scan must block');
           assert.ok(prBuild.includes('severity: HIGH,CRITICAL'));
           assert.ok(prBuild.includes('traefik-dns-sync:ci -m unittest discover -s /tests -v'), 'Built image must run application tests');
+          assert.ok(workflow.includes('REDIS_INTEGRATION: "1"'), 'Redis integration must run in required PR CI');
+          assert.ok(workflow.includes('redis:7.4-alpine'), 'A disposable Redis service must back integration tests');
           NODE
