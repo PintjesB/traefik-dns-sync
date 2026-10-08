@@ -1,0 +1,13 @@
+name: Sync Renovate labels
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled]
+
+permissions: {}
+
+jobs:
+  reconcile:
+    permissions:
+      issues: write
+    uses: PintjesB/github-runners/.github/workflows/_sync-renovate-merge-labels.yml@main
