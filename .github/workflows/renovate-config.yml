@@ -155,7 +155,12 @@ jobs:
 
             if (result.ignoreTests !== false || result.platformAutomerge !== false || result.automergeType !== 'pr' || result.internalChecksAsSuccess === true) failures.push(`${label}: CI bypass`);
             if (dependency.datasource === 'docker' && ['postgres','redis','ghcr.io/example/postgres','mcr.microsoft.com/mssql/server'].includes(dependency.depName)) {
-              if (result.dependencyDashboardApproval !== true) failures.push(`${label}: stateful approval missing`);
+              const disposableRedis = dependency.depName === 'redis' &&
+                dependency.packageFile === '.github/workflows/docker.yml' &&
+                ['patch','minor','pin','pinDigest','digest'].includes(dependency.updateType);
+              if (result.dependencyDashboardApproval !== !disposableRedis) {
+                failures.push(`${label}: incorrect stateful approval (disposableRedis=${disposableRedis})`);
+              }
             }
           }
           for (const key of ['automerge','platformAutomerge','ignoreTests']) assert.equal(raw[key], false);
