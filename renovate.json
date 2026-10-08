@@ -177,13 +177,6 @@
       "automerge": false
     },
     {
-      "description": "Wait three days before selecting npm releases, including transitive lockfile resolutions where supported",
-      "matchDatasources": [
-        "npm"
-      ],
-      "minimumReleaseAge": "3 days"
-    },
-    {
       "description": "Automerge image packaging tool patches and stable minors validated by Docker CI",
       "matchManagers": [
         "pip_requirements"
@@ -262,6 +255,5 @@
   },
   "statusCheckWhen": {
     "artifactError": "always"
-  },
-  "internalChecksFilter": "strict"
+  }
 }
