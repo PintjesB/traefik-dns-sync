@@ -134,8 +134,7 @@ jobs:
           add('pip_requirements', 'redis', 'major', false, 'requirements.txt', '5.3.1');
           add('pip_requirements', 'setuptools', 'minor', true, 'requirements.txt', '82.0.0');
           assert.equal(raw.statusCheckWhen?.artifactError,'always','Renovate artifact validation must be visible');
-          assert.equal(raw.internalChecksFilter,'strict','Do not open unaged npm release branches');
-          assert.ok(raw.packageRules.some(rule => rule.matchDatasources?.includes('npm') && rule.minimumReleaseAge === '3 days'), 'npm release cooldown must be configured');
+          assert.ok(!raw.packageRules.some(rule => rule.minimumReleaseAge), 'No irrelevant npm cooldown rule in this Python-only repository');
           for (const update of ['patch','minor','pin','pinDigest','digest']) {
             add('github-actions','redis',update,true,'.github/workflows/docker.yml','7.4.11','docker');
           }
