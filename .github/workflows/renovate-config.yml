@@ -119,7 +119,7 @@ jobs:
             for (const update of ['patch','pin','pinDigest','digest']) add('dockerfile', pkg, update, true, 'Dockerfile');
             for (const update of ['minor','major']) add('dockerfile', pkg, update, false, 'Dockerfile');
           }
-          for (const update of routine) add('pip_requirements', 'setuptools', update, false, 'requirements.txt');
+          for (const update of routine) add('pip_requirements', 'setuptools', update, ['patch','minor'].includes(update), 'requirements.txt');
           for (const update of routine) add('custom.regex', 'rhysd/actionlint', update, true, '.github/workflows/workflow-lint.yml');
           for (const pkg of ['postgres','redis','ghcr.io/example/postgres','mcr.microsoft.com/mssql/server','unreviewed/image']) {
             for (const update of [...routine,'major']) add('dockerfile', pkg, update, false, 'Dockerfile');
@@ -129,6 +129,16 @@ jobs:
               pkg, update, false, "Dockerfile", '1.2.3', ['@openai/codex','chromatic'].includes(pkg) ? 'npm' : 'github-releases');
           }
           add('unknown-manager', 'unknown/package', 'patch', false, 'unknown');
+          add('pip_requirements', 'redis', 'patch', true, 'requirements.txt', '5.3.1');
+          add('pip_requirements', 'redis', 'minor', true, 'requirements.txt', '5.3.1');
+          add('pip_requirements', 'redis', 'major', false, 'requirements.txt', '5.3.1');
+          add('pip_requirements', 'setuptools', 'minor', true, 'requirements.txt', '82.0.0');
+          assert.equal(raw.statusCheckWhen?.artifactError,'always','Renovate artifact validation must be visible');
+          assert.ok(!raw.packageRules.some(rule => rule.minimumReleaseAge), 'No irrelevant npm cooldown rule in this Python-only repository');
+          for (const update of ['patch','minor','pin','pinDigest','digest']) {
+            add('github-actions','redis',update,true,'.github/workflows/docker.yml','7.4.11','docker');
+          }
+          add('github-actions','redis','major',false,'.github/workflows/docker.yml','7.4.11','docker');
           const failures = [];
           for (const [dependency, want] of cases) {
             const result = await applyPackageRules({ ...config, ...dependency });
@@ -144,7 +154,12 @@ jobs:
 
             if (result.ignoreTests !== false || result.platformAutomerge !== false || result.automergeType !== 'pr' || result.internalChecksAsSuccess === true) failures.push(`${label}: CI bypass`);
             if (dependency.datasource === 'docker' && ['postgres','redis','ghcr.io/example/postgres','mcr.microsoft.com/mssql/server'].includes(dependency.depName)) {
-              if (result.dependencyDashboardApproval !== true) failures.push(`${label}: stateful approval missing`);
+              const disposableRedis = dependency.depName === 'redis' &&
+                dependency.packageFile === '.github/workflows/docker.yml' &&
+                ['patch','minor','pin','pinDigest','digest'].includes(dependency.updateType);
+              if (result.dependencyDashboardApproval !== !disposableRedis) {
+                failures.push(`${label}: incorrect stateful approval (disposableRedis=${disposableRedis})`);
+              }
             }
           }
           for (const key of ['automerge','platformAutomerge','ignoreTests']) assert.equal(raw[key], false);
@@ -163,4 +178,6 @@ jobs:
           assert.ok(prBuild.includes('exit-code: "1"'), 'PR image scan must block');
           assert.ok(prBuild.includes('severity: HIGH,CRITICAL'));
           assert.ok(prBuild.includes('traefik-dns-sync:ci -m unittest discover -s /tests -v'), 'Built image must run application tests');
+          assert.ok(workflow.includes('REDIS_INTEGRATION: "1"'), 'Redis integration must run in required PR CI');
+          assert.ok(workflow.includes('redis:7.4-alpine'), 'A disposable Redis service must back integration tests');
           NODE
