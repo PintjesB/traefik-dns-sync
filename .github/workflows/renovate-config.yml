@@ -179,5 +179,5 @@ jobs:
           assert.ok(prBuild.includes('severity: HIGH,CRITICAL'));
           assert.ok(prBuild.includes('traefik-dns-sync:ci -m unittest discover -s /tests -v'), 'Built image must run application tests');
           assert.ok(workflow.includes('REDIS_INTEGRATION: "1"'), 'Redis integration must run in required PR CI');
-          assert.ok(workflow.includes('redis:7.4-alpine'), 'A disposable Redis service must back integration tests');
+          assert.match(workflow, /^      redis:\r?\n        image: redis:\d+(?:\.\d+)*-alpine@sha256:[a-f0-9]{64}$/m, 'Integration must use a versioned, digest-pinned Redis service');
           NODE
