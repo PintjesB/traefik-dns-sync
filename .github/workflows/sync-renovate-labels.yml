@@ -11,4 +11,4 @@ jobs:
     permissions:
       issues: write
       pull-requests: write
-    uses: PintjesB/github-runners/.github/workflows/_sync-renovate-merge-labels.yml@main
+    uses: PintjesB/github-runners/.github/workflows/_sync-renovate-merge-labels.yml@5f62af89bdcfd80d65e418731a8ef9c36f9dfd4d # main
