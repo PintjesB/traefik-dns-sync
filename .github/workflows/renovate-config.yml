@@ -179,5 +179,12 @@ jobs:
           assert.ok(prBuild.includes('severity: HIGH,CRITICAL'));
           assert.ok(prBuild.includes('traefik-dns-sync:ci -m unittest discover -s /tests -v'), 'Built image must run application tests');
           assert.ok(workflow.includes('REDIS_INTEGRATION: "1"'), 'Redis integration must run in required PR CI');
-          assert.match(workflow, /^      redis:\r?\n        image: redis:\d+(?:\.\d+)*-alpine@sha256:[a-f0-9]{64}$/m, 'Integration must use a versioned, digest-pinned Redis service');
+          const redisMatrixImages = [...workflow.matchAll(/^            redis_image: (redis:(?:7|8)\.\d+-alpine@sha256:[a-f0-9]{64})$/gm)].map(match => match[1]);
+          assert.equal(redisMatrixImages.length, 2, 'Redis CI must pin exactly two Redis images in the matrix');
+          assert.equal(new Set(redisMatrixImages).size, 2, 'Redis matrix images must be distinct');
+          for (const major of ['7', '8']) {
+            assert.ok(redisMatrixImages.some(image => image.startsWith(`redis:${major}.`)), `Redis ${major} integration is mandatory`);
+          }
+          assert.match(workflow, /^      redis:\r?\n        image: \$\{\{ matrix\.redis_image \}\}$/m, 'Redis service must consume pinned matrix images');
+          assert.match(workflow, /^      fail-fast: false$/m, 'Both Redis versions must complete even if one fails');
           NODE
