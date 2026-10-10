@@ -27,13 +27,21 @@ env:
 
 jobs:
   test:
-    name: Unit tests + Redis integration
+    name: Unit tests + Redis ${{ matrix.redis_version }} integration
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - redis_version: '7'
+            redis_image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+          - redis_version: '8'
+            redis_image: redis:8.10-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
     permissions:
       contents: read
     services:
       redis:
-        image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+        image: ${{ matrix.redis_image }}
         ports:
           - 6379:6379
         options: >-
