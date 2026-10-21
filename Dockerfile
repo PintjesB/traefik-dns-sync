@@ -1,5 +1,5 @@
 # cache-bust: 2026-03-05-v3 — fixes venv + runtime compatibility
-FROM python:3.11-slim@sha256:0a236bf8f0b6013383df04d1cd02cb0abe5fbfa1a7012141d7ff9202b7cb30a6
+FROM python:3.11-slim@sha256:cce12316475d7d56d605f76e1d811d0dc4e7227f2d4afd29951521264f504ff8
 
 # Install the available security fix in the pinned Debian base.
 RUN apt-get update \
