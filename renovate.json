@@ -6,11 +6,11 @@
     "helpers:pinGitHubActionDigests"
   ],
   "timezone": "Europe/Brussels",
-  "automergeSchedule": [],
+  "automergeSchedule": ["* 3-4 * * *"],
   "rebaseWhen": "automerging",
-  "prHourlyLimit": 0,
-  "prConcurrentLimit": 0,
-  "branchConcurrentLimit": 0,
+  "prHourlyLimit": 6,
+  "prConcurrentLimit": 12,
+  "branchConcurrentLimit": 16,
   "labels": [
     "renovate"
   ],

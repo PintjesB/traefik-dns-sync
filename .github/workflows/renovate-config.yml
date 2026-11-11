@@ -87,6 +87,13 @@ jobs:
           const { applyPackageRules } = await load('util/package-rules/index.js');
           const { resolveConfigPresets } = await load('config/presets/index.js');
           const raw = JSON.parse(fs.readFileSync('renovate.json', 'utf8'));
+          assert.deepEqual(raw.automergeSchedule, ['* 3-4 * * *']);
+          assert.equal(raw.timezone, 'Europe/Brussels');
+          assert.equal(raw.prHourlyLimit, 6);
+          assert.equal(raw.prConcurrentLimit, 12);
+          assert.equal(raw.branchConcurrentLimit, 16);
+          assert.equal(raw.platformAutomerge, false);
+          assert.equal(raw.ignoreTests, false);
           const resolved = await resolveConfigPresets(raw);
           const config = resolved.config ?? resolved;
           const cases = [];
