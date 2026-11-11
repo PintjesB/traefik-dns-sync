@@ -3,7 +3,7 @@ name: Automation health
 # Issues are deduplicated by workflow and closed after a successful recovery.
 on:
   workflow_run:
-    workflows: ["Build and Push Docker Image", "Validate Renovate configuration"]
+    workflows: ["Build and Push Docker Image", "Validate Renovate configuration", "workflow-lint"]
     types: [completed]
     branches: [main]
   schedule:
@@ -14,6 +14,11 @@ permissions:
   actions: read
   contents: read
   issues: write
+
+concurrency:
+  group: automation-health-${{ github.event.workflow_run.name || 'scheduled' }}
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   report:
@@ -35,7 +40,6 @@ jobs:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           BASE_BRANCH: "main"
           PRIMARY_FILE: "docker.yml"
-          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
           if [[ "$EVENT_TYPE" != workflow_run ]]; then
@@ -89,5 +93,5 @@ jobs:
           if [[ -n "$existing" ]]; then
             gh issue edit "$existing" --body-file "$file"
           else
-            gh issue create --title "$title" --body-file "$file" --assignee "$OWNER"
+            gh issue create --title "$title" --body-file "$file"
           fi
