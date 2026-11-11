@@ -6,6 +6,9 @@
     "helpers:pinGitHubActionDigests"
   ],
   "timezone": "Europe/Brussels",
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 0,
+  "branchConcurrentLimit": 0,
   "labels": [
     "renovate"
   ],
