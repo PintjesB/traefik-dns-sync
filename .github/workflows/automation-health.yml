@@ -18,7 +18,6 @@ permissions:
 concurrency:
   group: automation-health-${{ github.event.workflow_run.name || 'scheduled' }}
   cancel-in-progress: false
-  queue: max
 
 jobs:
   report:
