@@ -3,7 +3,7 @@ name: Automation health
 # Issues are deduplicated by workflow and closed after a successful recovery.
 on:
   workflow_run:
-    workflows: ["Build and Push Docker Image", "Validate Renovate configuration", "workflow-lint"]
+    workflows: ["Build and Push Docker Image", "Auto Tag", "Validate Renovate configuration", "workflow-lint"]
     types: [completed]
     branches: [main]
   schedule:
@@ -32,6 +32,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           EVENT_TYPE: ${{ github.event_name }}
           WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
           WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
