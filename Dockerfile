@@ -3,7 +3,7 @@ FROM python:3.11-slim@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9
 
 # Install the available security fix in the pinned Debian base.
 RUN apt-get update \
-    && apt-get install -y --only-upgrade --no-install-recommends libpcre2-8-0 \
+    && apt-get install -y --only-upgrade --no-install-recommends libpcre2-8-0 zlib1g \
     && rm -rf /var/lib/apt/lists/*
 
 # Security: dedicated non-root user (best practice 2026)
