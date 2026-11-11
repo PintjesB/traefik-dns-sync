@@ -6,7 +6,7 @@
     "helpers:pinGitHubActionDigests"
   ],
   "timezone": "Europe/Brussels",
-  "prHourlyLimit": 10,
+  "prHourlyLimit": 0,
   "prConcurrentLimit": 0,
   "branchConcurrentLimit": 0,
   "labels": [
