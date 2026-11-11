@@ -6,6 +6,8 @@
     "helpers:pinGitHubActionDigests"
   ],
   "timezone": "Europe/Brussels",
+  "automergeSchedule": [],
+  "rebaseWhen": "automerging",
   "prHourlyLimit": 0,
   "prConcurrentLimit": 0,
   "branchConcurrentLimit": 0,
@@ -14,7 +16,6 @@
   ],
   "platformAutomerge": false,
   "automergeType": "pr",
-  "rebaseWhen": "automerging",
   "ignoreTests": false,
   "packageRules": [
     {
