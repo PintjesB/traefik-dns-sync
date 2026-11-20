@@ -1,0 +1,97 @@
+name: Automation health
+
+# Issues are deduplicated by workflow and closed after a successful recovery.
+on:
+  workflow_run:
+    workflows: ["Build and Push Docker Image", "Auto Tag", "Validate Renovate configuration", "workflow-lint"]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: automation-health-${{ github.event.workflow_run.name || 'scheduled' }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Update actionable CI and release incident
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_TYPE: ${{ github.event_name }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          BASE_BRANCH: "main"
+          PRIMARY_FILE: "docker.yml"
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_TYPE" != workflow_run ]]; then
+            # A stalled self-hosted runner never emits a completed workflow event.
+            # This scheduled check detects main-branch jobs stuck for over 60 minutes.
+            latest="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$PRIMARY_FILE/runs?branch=$BASE_BRANCH&per_page=1")"
+            [[ "$(jq -r '.total_count // 0' <<< "$latest")" -gt 0 ]] || exit 0
+            WORKFLOW_NAME="$(jq -r '.workflow_runs[0].name' <<< "$latest")"
+            WORKFLOW_URL="$(jq -r '.workflow_runs[0].html_url' <<< "$latest")"
+            HEAD_SHA="$(jq -r '.workflow_runs[0].head_sha' <<< "$latest")"
+            state="$(jq -r '.workflow_runs[0].status' <<< "$latest")"
+            WORKFLOW_CONCLUSION="$(jq -r '.workflow_runs[0].conclusion // "pending"' <<< "$latest")"
+            if [[ "$state" != completed ]]; then
+              started="$(date -u -d "$(jq -r '.workflow_runs[0].created_at' <<< "$latest")" +%s)"
+              age=$(( $(date -u +%s) - started ))
+              (( age >= 3600 )) || exit 0
+              WORKFLOW_CONCLUSION="stalled for $((age / 60)) minutes"
+            fi
+          fi
+
+          case "$WORKFLOW_CONCLUSION" in
+            success) result=recovered ;;
+            failure|startup_failure|timed_out|action_required|stalled*) result=failed ;;
+            *) exit 0 ;;
+          esac
+          title="[automation] $WORKFLOW_NAME on $BASE_BRANCH"
+          existing="$(gh issue list --state open --limit 200 --json number,title |
+            jq -r --arg title "$title" '.[] | select(.title == $title) | .number' |
+            head -n 1)"
+
+          if [[ "$result" == recovered ]]; then
+            if [[ -n "$existing" ]]; then
+              gh issue close "$existing" --reason completed --comment \
+                "Recovered after successful workflow: $WORKFLOW_URL"
+            fi
+            exit 0
+          fi
+
+          file="$RUNNER_TEMP/automation-incident.md"
+          {
+            echo "## Automation failure"
+            echo
+            echo "- Workflow: $WORKFLOW_NAME"
+            echo "- Result: $WORKFLOW_CONCLUSION"
+            echo "- Branch: \`$BASE_BRANCH\`"
+            echo "- Commit: \`$HEAD_SHA\`"
+            echo "- [Investigate workflow run]($WORKFLOW_URL)"
+            echo
+            echo "Check the failing job or runner availability. This issue closes on the next successful workflow run."
+          } > "$file"
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --body-file "$file"
+          else
+            gh issue create --title "$title" --body-file "$file"
+          fi
